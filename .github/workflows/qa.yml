@@ -1,0 +1,38 @@
+name: CD - Deploy to QA
+
+on:
+  push:
+    branches: [ "qa" ]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v3
+
+      - name: Login en Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build y Push de imagen (QA)
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          tags: ${{ secrets.DOCKER_USERNAME }}/hola-mundo:qa
+
+      - name: Despliegue en AWS EC2 QA vía SSH
+        uses: appleboy/ssh-action@v0.1.10
+        with:
+          host: ${{ secrets.HOST_QA }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            docker pull ${{ secrets.DOCKER_USERNAME }}/hola-mundo:qa
+            docker stop app-qa || true
+            docker rm app-qa || true
+            docker run -d --name app-qa -p 80:80 ${{ secrets.DOCKER_USERNAME }}/hola-mundo:qa
+            docker image prune -f
